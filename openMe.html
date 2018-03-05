@@ -9,37 +9,45 @@
 </head>
 <body>
 	<div id="hierarchy1">
-		<svg id="treemap" width="400" height="1000"></svg>
 	</div>
 	<div id="hierarchy2">
-		<!-- <svg id="sunburst" width="400" height="1000"></svg> -->
-
 	</div>
 	
 	<script>
 		/*
-		 * Name1: YOUR NAME
-		 * Name2: PARTNER'S NAME
+		 * Name1: Justin Jo
+		 * Name2: Ivan Chen
 		 * Name3: (if applicable) PARTNER'S NAME
 		 */
+		var width1 = d3.select("#hierarchy1").node().getBoundingClientRect().width,
+			height1 = d3.select("#hierarchy1").node().getBoundingClientRect().height,
+			width2 = d3.select("#hierarchy2").node().getBoundingClientRect().width,
+			height2 = d3.select("#hierarchy2").node().getBoundingClientRect().height;
+
+
 
 		console.log(root);
-		var svg1 = d3.select("#treemap"), 
-			width = +svg1.attr("width"),
-		    height = +svg1.attr("height");
 
-		var fader = function(color) { return d3.interpolateRgb(color, "#fff")(0.2); },
-		    color = d3.scaleOrdinal(d3.schemeCategory20.map(fader)),
-		    format = d3.format(",d");
 
-		var treemap = d3.treemap()
-		    .tile(d3.treemapResquarify)
-		    .size([width, height])
-		    .round(true)
-		    .paddingInner(1);
+		var data = root;
+			var fader = function(color) { return d3.interpolateRgb(color, "#fff")(0.2); },
+			    color = d3.scaleOrdinal(d3.schemeCategory20.map(fader)),
+			    format = d3.format(",d");
 
-		d3.json("flare.json", function(error, data) {
-			if (error) throw error;
+		function renderTreemap(data) {
+			// append svg element
+			var svg1 = d3.select("#hierarchy1").append("svg")
+				.attr("id", "treemap")
+			    .attr("width", width1)
+			    .attr("height", height1);
+
+
+
+			var treemap = d3.treemap()
+			    .tile(d3.treemapResquarify)
+			    .size([width1, height1])
+			    .round(true)
+			    .paddingInner(1);
 
 			var root = d3.hierarchy(data)
 			  .eachBefore(function(d) { d.data.id = (d.parent ? d.parent.data.id + "." : "") + d.data.name; })
@@ -98,84 +106,101 @@
 			    .attr("width", function(d) { return d.x1 - d.x0; })
 			    .attr("height", function(d) { return d.y1 - d.y0; });
 			}
-		});
 
-		function sumByCount(d) {
-		  return d.children ? 0 : 1;
+			function sumByCount(d) {
+			  return d.children ? 0 : 1;
+			}
+
+			function sumBySize(d) {
+			  return d.size;
+			}
 		}
 
-		function sumBySize(d) {
-		  return d.size;
+
+		function renderSunburst(data) {
+			var width2 = 960,
+			    height2 = 700,
+			    radius = Math.min(width2, height2) / 2;
+			// var color = d3.scale.category20c();
+
+
+			var svg2 = d3.select("#hierarchy2").append("svg")
+			    .attr("width", width2)
+			    .attr("height", height2)
+			  .append("g")
+			    .attr("transform", "translate(" + width2 / 2 + "," + height2 * .52 + ")");
+
+			var partition = d3.layout.partition()
+			    .sort(null)
+			    .size([2 * Math.PI, radius * radius])
+			    .value(function(d) { return 1; });
+
+			var arc = d3.svg.arc()
+			    .startAngle(function(d) { return d.x; })
+			    .endAngle(function(d) { return d.x + d.dx; })
+			    .innerRadius(function(d) { return Math.sqrt(d.y); })
+			    .outerRadius(function(d) { return Math.sqrt(d.y + d.dy); });
+
+
+			var path = svg2.datum(data).selectAll("path")
+			  .data(partition.nodes)
+			.enter().append("path")
+			  .attr("display", function(d) { return d.depth ? null : "none"; }) // hide inner ring
+			  .attr("d", arc)
+			  .style("stroke", "#fff")
+			  // .style("fill", function(d) { return color((d.children ? d : d.parent).name); })
+  			  .style("fill", function(d) { return color((d.children ? d : d.parent).id); })
+
+			  .style("fill-rule", "evenodd")
+			  .each(stash);
+
+			d3.selectAll("input").on("change", function change() {
+			var value = this.value === "count"
+			    ? function() { return 1; }
+			    : function(d) { return d.size; };
+
+			path
+			    .data(partition.value(value).nodes)
+			  .transition()
+			    .duration(1500)
+			    .attrTween("d", arcTween);
+			});
+
+
+			// Stash the old values for transition.
+			function stash(d) {
+			  d.x0 = d.x;
+			  d.dx0 = d.dx;
+			}
+
+			// Interpolate the arcs in data space.
+			function arcTween(a) {
+			  var i = d3.interpolate({x: a.x0, dx: a.dx0}, a);
+			  return function(t) {
+			    var b = i(t);
+			    a.x0 = b.x;
+			    a.dx0 = b.dx;
+			    return arc(b);
+			  };
+			}
+
+			d3.select(self.frameElement).style("height", height2 + "px");
 		}
 		
-var width = 960,
-    height = 700,
-    radius = Math.min(width, height) / 2,
-    color = d3.scale.category20c();
+
+		renderTreemap(data);
+		renderSunburst(data);
+
+console.log(color("test.2"));
+console.log(color("test.1"));
 
 
-var svg2 = d3.select("#hierarchy2").append("svg")
-    .attr("width", width)
-    .attr("height", height)
-  .append("g")
-    .attr("transform", "translate(" + width / 2 + "," + height * .52 + ")");
 
-var partition = d3.layout.partition()
-    .sort(null)
-    .size([2 * Math.PI, radius * radius])
-    .value(function(d) { return 1; });
 
-var arc = d3.svg.arc()
-    .startAngle(function(d) { return d.x; })
-    .endAngle(function(d) { return d.x + d.dx; })
-    .innerRadius(function(d) { return Math.sqrt(d.y); })
-    .outerRadius(function(d) { return Math.sqrt(d.y + d.dy); });
 
-d3.json("flare.json", function(error, root) {
-  if (error) throw error;
 
-  var path = svg2.datum(root).selectAll("path")
-      .data(partition.nodes)
-    .enter().append("path")
-      .attr("display", function(d) { return d.depth ? null : "none"; }) // hide inner ring
-      .attr("d", arc)
-      .style("stroke", "#fff")
-      .style("fill", function(d) { return color((d.children ? d : d.parent).name); })
-      .style("fill-rule", "evenodd")
-      .each(stash);
 
-  d3.selectAll("input").on("change", function change() {
-    var value = this.value === "count"
-        ? function() { return 1; }
-        : function(d) { return d.size; };
-
-    path
-        .data(partition.value(value).nodes)
-      .transition()
-        .duration(1500)
-        .attrTween("d", arcTween);
-  });
-});
-
-// Stash the old values for transition.
-function stash(d) {
-  d.x0 = d.x;
-  d.dx0 = d.dx;
-}
-
-// Interpolate the arcs in data space.
-function arcTween(a) {
-  var i = d3.interpolate({x: a.x0, dx: a.dx0}, a);
-  return function(t) {
-    var b = i(t);
-    a.x0 = b.x;
-    a.dx0 = b.dx;
-    return arc(b);
-  };
-}
-
-d3.select(self.frameElement).style("height", height + "px");
-
+		// window.addEventListener("resize", redraw);
 	</script>
 </body>
 </head>
